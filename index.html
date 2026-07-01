@@ -472,13 +472,13 @@
           <div><label class="field-label">Data</label><input type="date" id="m-data" class="field w-full text-sm py-2" /></div>
           <div><label class="field-label">Tipo</label>
             <select id="m-tipo" onchange="atualizarCatsPorTipo()" class="field w-full text-sm py-2">
-              <option value="Saída">Saída</option><option value="Entrada">Entrada</option>
+              <option value="Saída">Saída</option><option value="Entrada">Entrada</option><option value="Salário">Salário</option>
             </select>
           </div>
         </div>
         <div><label class="field-label">Descrição</label><input type="text" id="m-desc" placeholder="Ex: Supermercado, Salário…" class="field w-full text-sm py-2" /></div>
         <div class="grid grid-cols-2 gap-3">
-          <div><label class="field-label">Categoria</label><select id="m-cat" class="field w-full text-sm py-2"></select></div>
+          <div id="cat-field"><label class="field-label">Categoria</label><select id="m-cat" class="field w-full text-sm py-2"></select></div>
           <div><label class="field-label">Valor (R$)</label><input type="number" id="m-valor" placeholder="0,00" min="0" step="0.01" class="field w-full text-sm py-2 font-mono" /></div>
         </div>
         <div><label class="field-label">Observação (opcional)</label><input type="text" id="m-obs" placeholder="Nota adicional…" class="field w-full text-sm py-2" /></div>

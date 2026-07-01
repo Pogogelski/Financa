@@ -486,13 +486,22 @@ function catsFiltradas(tipo) {
 }
 
 window.atualizarCatsPorTipo = function() {
-  const tipo  = document.getElementById('m-tipo').value;
-  const sel   = document.getElementById('m-cat');
-  const cur   = sel.value;
-  const lista = catsFiltradas(tipo);
-  sel.innerHTML = lista.map(c=>`<option value="${c.nome}">${c.icone} ${c.nome}</option>`).join('');
-  if (lista.find(c => c.nome === cur)) sel.value = cur;
+  const tipo     = document.getElementById('m-tipo').value;
+  const catField = document.getElementById('cat-field');
+  const sel      = document.getElementById('m-cat');
 
+  if (tipo === 'Salário') {
+    // Salário não precisa de categoria: é fixo.
+    if (catField) catField.style.display = 'none';
+    sel.innerHTML = '<option value="Salário">Salário</option>';
+    sel.value = 'Salário';
+  } else {
+    if (catField) catField.style.display = '';
+    const cur   = sel.value;
+    const lista = catsFiltradas(tipo);
+    sel.innerHTML = lista.map(c=>`<option value="${c.nome}">${c.icone} ${c.nome}</option>`).join('');
+    if (lista.find(c => c.nome === cur)) sel.value = cur;
+  }
 
   const sec = document.getElementById('parcela-section');
   if (sec) {
@@ -511,11 +520,12 @@ window.openModal = function(firestoreId) {
   if (firestoreId) {
     const l=lancamentos.find(x=>x.firestoreId===firestoreId);
     document.getElementById('modal-title').textContent='Editar lançamento';
+    const ehSalario = l.tipo === 'Entrada' && l.categoria === 'Salário';
     document.getElementById('m-id').value    = l.firestoreId;
     document.getElementById('m-data').value  = l.data;
-    document.getElementById('m-tipo').value  = l.tipo;
+    document.getElementById('m-tipo').value  = ehSalario ? 'Salário' : l.tipo;
     window.atualizarCatsPorTipo();
-    document.getElementById('m-cat').value   = l.categoria;
+    if (!ehSalario) document.getElementById('m-cat').value = l.categoria;
     document.getElementById('m-desc').value  = l.descricao;
     document.getElementById('m-valor').value = l.valor;
     document.getElementById('m-obs').value   = l.obs||'';
@@ -606,13 +616,17 @@ document.addEventListener('input', e => {
 });
 
 window.salvarLancamento = async function() {
-  const fid   = document.getElementById('m-id').value;
-  const data  = document.getElementById('m-data').value;
-  const tipo  = document.getElementById('m-tipo').value;
-  const desc  = document.getElementById('m-desc').value.trim();
-  const cat   = document.getElementById('m-cat').value;
-  const valor = parseFloat(document.getElementById('m-valor').value);
-  const obs   = document.getElementById('m-obs').value.trim();
+  const fid       = document.getElementById('m-id').value;
+  const data      = document.getElementById('m-data').value;
+  const tipoSel   = document.getElementById('m-tipo').value;
+  const desc      = document.getElementById('m-desc').value.trim();
+  const valor     = parseFloat(document.getElementById('m-valor').value);
+  const obs       = document.getElementById('m-obs').value.trim();
+
+  // "Salário" é uma opção de Tipo na interface, mas internamente
+  // continua sendo uma Entrada com categoria fixa "Salário".
+  const tipo = tipoSel === 'Salário' ? 'Entrada' : tipoSel;
+  const cat  = tipoSel === 'Salário' ? 'Salário' : document.getElementById('m-cat').value;
 
   if (!data||!desc||!valor||valor<=0) {
     await alert_('⚠️','Campos obrigatórios','Preencha data, descrição e valor antes de salvar.');
