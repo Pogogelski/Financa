@@ -24,7 +24,7 @@ const db   = getFirestore(app);
 let currentUser = null;
 let lancamentos = [];
 let categorias  = [];
-let config      = { nome: '', salario: 0, meta: 20 };
+let config      = { nome: '', meta: 20 };
 
 
 const uid     = ()     => currentUser.uid;
@@ -132,7 +132,7 @@ async function carregarDados() {
         await updateProfile(currentUser, { displayName: config.nome });
       }
     } else {
-      config = { nome: currentUser.displayName||'', salario:0, meta:20 };
+      config = { nome: currentUser.displayName||'', meta:20 };
       await setDoc(cfgDoc('main'), config);
     }
 
@@ -270,39 +270,29 @@ function saldoAcumuladoAnterior(mes, ano) {
 
   if (!anteriores.length) return 0;
 
-
-  const mesesDistintos = new Set(
-    anteriores.map(l => {
-      const d = new Date(l.data + 'T12:00:00');
-      return `${d.getFullYear()}-${d.getMonth()}`;
-    })
-  );
-
-  const sal      = config.salario || 0;
   const totalE   = anteriores.filter(l=>l.tipo==='Entrada').reduce((a,l)=>a+l.valor, 0);
   const totalS   = anteriores.filter(l=>l.tipo==='Saída').reduce((a,l)=>a+l.valor, 0);
   const totalDep = anteriores.filter(l=>l.tipo==='Poupança'&&l.direcao==='Depósito').reduce((a,l)=>a+l.valor, 0);
   const totalRes = anteriores.filter(l=>l.tipo==='Poupança'&&l.direcao==='Resgate').reduce((a,l)=>a+l.valor, 0);
 
-
-  return sal * mesesDistintos.size + totalE - totalS - totalDep + totalRes;
+  return totalE - totalS - totalDep + totalRes;
 }
 
 window.renderDashboard = function() {
   const mes   = document.getElementById('filtro-mes').value;
   const ano   = document.getElementById('filtro-ano').value;
   const doMes = lancamentos.filter(l => mesDeData(l.data)===mes && anoDeData(l.data)===ano);
-  const sal   = config.salario || 0;
+  const sal   = doMes.filter(l=>l.tipo==='Entrada' && l.categoria==='Salário').reduce((a,l)=>a+l.valor,0);
 
   const gastos        = doMes.filter(l=>l.tipo==='Saída').reduce((a,l)=>a+l.valor,0);
   const entradas      = doMes.filter(l=>l.tipo==='Entrada').reduce((a,l)=>a+l.valor,0);
   const depositosMes  = doMes.filter(l=>l.tipo==='Poupança'&&l.direcao==='Depósito').reduce((a,l)=>a+l.valor,0);
   const resgatesMes   = doMes.filter(l=>l.tipo==='Poupança'&&l.direcao==='Resgate').reduce((a,l)=>a+l.valor,0);
   const saldoAnterior = saldoAcumuladoAnterior(mes, ano);
-  const saldo         = saldoAnterior + sal + entradas - gastos - depositosMes + resgatesMes;
-  const perc          = sal>0 ? Math.min(gastos/sal,1) : 0;
+  const saldo         = saldoAnterior + entradas - gastos - depositosMes + resgatesMes;
+  const perc          = entradas>0 ? Math.min(gastos/entradas,1) : 0;
   const gPct          = Math.round(perc*100);
-  const ePct          = sal>0 ? Math.round(Math.min(entradas/sal,1)*100) : 0;
+  const ePct          = 100;
 
   document.getElementById('dash-subtitle').textContent = `${mes} de ${ano}`;
   document.getElementById('kpi-salario').textContent   = fmtBRL(sal);
@@ -336,7 +326,7 @@ window.renderDashboard = function() {
 
   document.getElementById('kpi-gasto-bar').style.width      = gPct+'%';
   document.getElementById('kpi-ent-bar').style.width        = ePct+'%';
-  document.getElementById('kpi-saldo-bar').style.width      = sal>0 ? Math.max(0,Math.round(saldo/sal*100))+'%':'0%';
+  document.getElementById('kpi-saldo-bar').style.width      = entradas>0 ? Math.max(0,Math.min(100,Math.round(saldo/entradas*100)))+'%':'0%';
   document.getElementById('kpi-saldo-bar').style.background = saldo>=0?'#22c56e':'#f87171';
 
   document.getElementById('uso-pct').textContent         = gPct+'%';
@@ -346,7 +336,7 @@ window.renderDashboard = function() {
   usoBar.style.width      = gPct+'%';
   usoBar.style.background = perc>0.9?'#f87171':perc>0.7?'#fbbf24':'#22c56e';
 
-  renderLineChart(doMes, saldoAnterior + sal);
+  renderLineChart(doMes, saldoAnterior);
   renderPieChart(doMes);
   renderCatBreakdown(doMes);
   renderRecentTable(doMes);
@@ -936,7 +926,6 @@ window.excluirCategoria = async function(id, nome) {
 
 window.loadConfig = function() {
   document.getElementById('cfg-nome').value    = config.nome || currentUser.displayName || '';
-  document.getElementById('cfg-salario').value = config.salario ||'';
   document.getElementById('cfg-meta').value    = config.meta    ||20;
   const agora=new Date();
   document.getElementById('pdf-mes').value=MESES[agora.getMonth()];
@@ -945,7 +934,6 @@ window.loadConfig = function() {
 
 window.saveConfig = async function() {
   config.nome    = document.getElementById('cfg-nome').value.trim() || currentUser.displayName || '';
-  config.salario = parseFloat(document.getElementById('cfg-salario').value)||0;
   config.meta    = parseFloat(document.getElementById('cfg-meta').value)||20;
   await setDoc(cfgDoc('main'), config);
   initUserInfo();
@@ -977,15 +965,15 @@ window.gerarPDF = function() {
   const mes=document.getElementById('pdf-mes').value;
   const ano=document.getElementById('pdf-ano').value;
   const nome=config.nome||currentUser.displayName||'Usuário';
-  const sal=config.salario||0;
   const doMes=[...lancamentos].filter(l=>mesDeData(l.data)===mes&&anoDeData(l.data)===ano).sort((a,b)=>a.data.localeCompare(b.data));
+  const sal=doMes.filter(l=>l.tipo==='Entrada'&&l.categoria==='Salário').reduce((a,l)=>a+l.valor,0);
   const totalE=doMes.filter(l=>l.tipo==='Entrada').reduce((a,l)=>a+l.valor,0);
   const totalS=doMes.filter(l=>l.tipo==='Saída').reduce((a,l)=>a+l.valor,0);
   const totalDep=doMes.filter(l=>l.tipo==='Poupança'&&l.direcao==='Depósito').reduce((a,l)=>a+l.valor,0);
   const totalRes=doMes.filter(l=>l.tipo==='Poupança'&&l.direcao==='Resgate').reduce((a,l)=>a+l.valor,0);
   const saldoAnt=saldoAcumuladoAnterior(mes, ano);
-  const saldo=saldoAnt+sal+totalE-totalS-totalDep+totalRes;
-  let acc=saldoAnt+sal;
+  const saldo=saldoAnt+totalE-totalS-totalDep+totalRes;
+  let acc=saldoAnt;
   const linhas=doMes.map(l=>{
     if (l.tipo==='Entrada') acc+=l.valor;
     else if (l.tipo==='Saída') acc-=l.valor;

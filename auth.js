@@ -160,7 +160,6 @@ window.handleSignup = async function() {
   const email   = document.getElementById('su-email').value.trim();
   const pw      = document.getElementById('su-pw').value;
   const pw2     = document.getElementById('su-pw2').value;
-  const salario = parseFloat(document.getElementById('su-salario').value) || 0;
   let ok = true;
   if (!nome)                                               { fieldErr('err-su-nome',  true); ok = false; }
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ fieldErr('err-su-email', true); ok = false; }
@@ -178,7 +177,7 @@ window.handleSignup = async function() {
     await Promise.all([
       updateProfile(cred.user, { displayName: nome }),
       setDoc(doc(db, 'users', uid, 'config', 'main'), {
-        nome, salario, meta: 20, criadoEm: new Date().toISOString()
+        nome, meta: 20, criadoEm: new Date().toISOString()
       }),
       setDoc(doc(db, 'users', uid, 'config', 'categorias'), {
         lista: defaultCategorias()
