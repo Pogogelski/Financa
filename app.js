@@ -486,17 +486,21 @@ function catsFiltradas(tipo) {
 }
 
 window.atualizarCatsPorTipo = function() {
-  const tipo     = document.getElementById('m-tipo').value;
-  const catField = document.getElementById('cat-field');
-  const sel      = document.getElementById('m-cat');
+  const tipo      = document.getElementById('m-tipo').value;
+  const catField  = document.getElementById('cat-field');
+  const descField = document.getElementById('desc-field');
+  const sel       = document.getElementById('m-cat');
 
   if (tipo === 'Salário') {
-    // Salário não precisa de categoria: é fixo.
-    if (catField) catField.style.display = 'none';
+    // Salário não precisa de categoria nem descrição: são fixos.
+    if (catField)  catField.style.display  = 'none';
+    if (descField) descField.style.display = 'none';
     sel.innerHTML = '<option value="Salário">Salário</option>';
     sel.value = 'Salário';
+    document.getElementById('m-desc').value = 'Salário';
   } else {
-    if (catField) catField.style.display = '';
+    if (catField)  catField.style.display  = '';
+    if (descField) descField.style.display = '';
     const cur   = sel.value;
     const lista = catsFiltradas(tipo);
     sel.innerHTML = lista.map(c=>`<option value="${c.nome}">${c.icone} ${c.nome}</option>`).join('');
@@ -525,8 +529,10 @@ window.openModal = function(firestoreId) {
     document.getElementById('m-data').value  = l.data;
     document.getElementById('m-tipo').value  = ehSalario ? 'Salário' : l.tipo;
     window.atualizarCatsPorTipo();
-    if (!ehSalario) document.getElementById('m-cat').value = l.categoria;
-    document.getElementById('m-desc').value  = l.descricao;
+    if (!ehSalario) {
+      document.getElementById('m-cat').value  = l.categoria;
+      document.getElementById('m-desc').value = l.descricao;
+    }
     document.getElementById('m-valor').value = l.valor;
     document.getElementById('m-obs').value   = l.obs||'';
 
@@ -619,7 +625,7 @@ window.salvarLancamento = async function() {
   const fid       = document.getElementById('m-id').value;
   const data      = document.getElementById('m-data').value;
   const tipoSel   = document.getElementById('m-tipo').value;
-  const desc      = document.getElementById('m-desc').value.trim();
+  const desc      = tipoSel === 'Salário' ? 'Salário' : document.getElementById('m-desc').value.trim();
   const valor     = parseFloat(document.getElementById('m-valor').value);
   const obs       = document.getElementById('m-obs').value.trim();
 
