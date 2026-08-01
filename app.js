@@ -1205,6 +1205,18 @@ document.addEventListener('keydown', e=>{if(e.key==='Escape'){window.closeModal(
 const CHANGELOG = [
 
     {
+    versao: '1.5.0',
+    data: '2026-07-31',
+    emoji: '💲',
+    titulo: ' Crédito a vista & Modais',
+    itens: [
+      'Novo campo de limite de crédito no painel de configurações',
+      'Lançamentos no credito a vista são exibidos com badge especial e não afetam o saldo',
+      'Modais de lançamentos, categorias e poupança foram redesenhados para melhor usabilidade',
+    ]
+  },
+
+    {
     versao: '1.4.0',
     data: '2026-06-26',
     emoji: '🐷',
@@ -1216,17 +1228,6 @@ const CHANGELOG = [
     ]
   },
 
-  {
-    versao: '1.5.0',
-    data: '2026-07-31',
-    emoji: '💲',
-    titulo: ' Crédito a vista & Modais',
-    itens: [
-      'Novo campo de limite de crédito no painel de configurações',
-      'Lançamentos no credito a vista são exibidos com badge especial e não afetam o saldo',
-      'Modais de lançamentos, categorias e poupança foram redesenhados para melhor usabilidade',
-    ]
-  },
 
   {
     versao: '1.3.0',
