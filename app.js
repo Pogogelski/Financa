@@ -1204,7 +1204,7 @@ document.addEventListener('keydown', e=>{if(e.key==='Escape'){window.closeModal(
 
 const CHANGELOG = [
 
-  {
+    {
     versao: '1.4.0',
     data: '2026-06-26',
     emoji: '🐷',
@@ -1213,6 +1213,18 @@ const CHANGELOG = [
       'Nova seção de Poupança para depósitos e resgates',
       'Cálculo automático do saldo da poupança e exibição no dashboard',
       'Nova barra de navegação superior na versão mobile para acesso rápido às seções',
+    ]
+  },
+
+  {
+    versao: '1.5.0',
+    data: '2026-07-31',
+    emoji: '💲',
+    titulo: ' Crédito a vista & Modais',
+    itens: [
+      'Novo campo de limite de crédito no painel de configurações',
+      'Lançamentos no credito a vista são exibidos com badge especial e não afetam o saldo',
+      'Modais de lançamentos, categorias e poupança foram redesenhados para melhor usabilidade',
     ]
   },
 
