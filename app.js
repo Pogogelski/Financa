@@ -24,7 +24,7 @@ const db   = getFirestore(app);
 let currentUser = null;
 let lancamentos = [];
 let categorias  = [];
-let config      = { nome: '', meta: 20 };
+let config      = { nome: '', meta: 20, limiteCredito: 0 };
 
 
 const uid     = ()     => currentUser.uid;
@@ -121,6 +121,7 @@ async function carregarDados() {
     const cfgSnap = await getDoc(cfgDoc('main'));
     if (cfgSnap.exists()) {
       config = cfgSnap.data();
+      if (config.limiteCredito == null) config.limiteCredito = 0;
 
       if (!config.nome && currentUser.displayName) {
         config.nome = currentUser.displayName;
@@ -278,6 +279,33 @@ function saldoAcumuladoAnterior(mes, ano) {
   return totalE - totalS - totalDep + totalRes;
 }
 
+// Saldo em aberto do cartão de crédito: soma das parcelas futuras/atuais ainda
+// não pagas + compras no crédito à vista feitas no mês corrente. Funciona
+// independente do filtro de mês do dashboard, pois representa o comprometimento
+// real do limite "agora", como em um cartão de banco.
+function calcularLimiteCreditoUsado() {
+  const hoje       = new Date();
+  const anoAtual   = hoje.getFullYear();
+  const mesAtual0  = hoje.getMonth(); // 0-indexed
+
+  return lancamentos.reduce((total, l) => {
+    if (l.tipo !== 'Saída' || l.formaPagamento !== 'Crédito') return total;
+
+    const [y, m] = l.data.split('-').map(Number);
+    const m0 = m - 1;
+
+    if (l.parcelaTotal > 1) {
+      // Parcelado: conta se a parcela ainda não venceu (mês/ano atual ou futuro).
+      const aindaNaoPaga = (y > anoAtual) || (y === anoAtual && m0 >= mesAtual0);
+      return aindaNaoPaga ? total + l.valor : total;
+    }
+
+    // À vista no crédito: conta se foi feita no mês corrente.
+    const doMesAtual = y === anoAtual && m0 === mesAtual0;
+    return doMesAtual ? total + l.valor : total;
+  }, 0);
+}
+
 window.renderDashboard = function() {
   const mes   = document.getElementById('filtro-mes').value;
   const ano   = document.getElementById('filtro-ano').value;
@@ -329,12 +357,17 @@ window.renderDashboard = function() {
   document.getElementById('kpi-saldo-bar').style.width      = entradas>0 ? Math.max(0,Math.min(100,Math.round(saldo/entradas*100)))+'%':'0%';
   document.getElementById('kpi-saldo-bar').style.background = saldo>=0?'#22c56e':'#f87171';
 
-  document.getElementById('uso-pct').textContent         = gPct+'%';
-  document.getElementById('uso-label-gasto').textContent = 'Gasto: '+fmtBRL(gastos);
-  document.getElementById('uso-label-livre').textContent = 'Livre: '+fmtBRL(Math.max(0,saldo));
+  const limite      = config.limiteCredito || 0;
+  const usadoCred   = calcularLimiteCreditoUsado();
+  const percCred    = limite>0 ? Math.min(usadoCred/limite,1) : 0;
+  const credPct     = Math.round(percCred*100);
+
+  document.getElementById('uso-pct').textContent         = credPct+'%';
+  document.getElementById('uso-label-gasto').textContent = 'Usado: '+fmtBRL(usadoCred);
+  document.getElementById('uso-label-livre').textContent = 'Disponível: '+fmtBRL(Math.max(0,limite-usadoCred));
   const usoBar = document.getElementById('uso-bar');
-  usoBar.style.width      = gPct+'%';
-  usoBar.style.background = perc>0.9?'#f87171':perc>0.7?'#fbbf24':'#22c56e';
+  usoBar.style.width      = credPct+'%';
+  usoBar.style.background = percCred>0.9?'#f87171':percCred>0.7?'#fbbf24':'#22c56e';
 
   renderLineChart(doMes, saldoAnterior);
   renderPieChart(doMes);
@@ -441,6 +474,10 @@ window.renderLancamentos = function() {
     const parcelaBadge = l.parcelaTotal
       ? `<span style="margin-left:4px;font-size:.6rem;font-weight:600;padding:.12rem .45rem;border-radius:99px;background:rgba(251,191,36,.1);color:#fbbf24;vertical-align:middle">${l.parcelaNum}/${l.parcelaTotal}</span>`
       : '';
+    const formaIcone = { 'Dinheiro':'💵','Pix':'⚡','Débito':'💳','Crédito':'🏦' }[l.formaPagamento] || '';
+    const formaBadge = formaIcone
+      ? `<span style="margin-left:4px;font-size:.65rem;vertical-align:middle" title="${l.formaPagamento}">${formaIcone}</span>`
+      : '';
     const btnExcluir = l.parcelaGrupo
       ? `<button onclick="excluirLancamento('${l.firestoreId}','${l.descricao.replace(/'/g,"&#39;")}','${l.parcelaGrupo}')" class="act-btn danger" title="Excluir">
            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
@@ -454,7 +491,7 @@ window.renderLancamentos = function() {
     return `<tr class="row-anim" style="animation-delay:${i*.025}s">
       <td class="px-4 py-3 font-mono text-xs whitespace-nowrap" style="color:#71717a">${fmtData(l.data)}</td>
       <td class="px-4 py-3">
-        <div class="text-sm font-medium text-zinc-200">${l.descricao}${parcelaBadge}</div>
+        <div class="text-sm font-medium text-zinc-200">${l.descricao}${parcelaBadge}${formaBadge}</div>
         ${l.obs?`<div class="text-xs mt-0.5" style="color:#52525b">${l.obs}</div>`:''}
       </td>
       <td class="px-4 py-3 hidden md:table-cell"><span class="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full" style="background:${cat.cor}18;color:${cat.cor}">${cat.icone} ${l.categoria}</span></td>
@@ -507,12 +544,68 @@ window.atualizarCatsPorTipo = function() {
     if (lista.find(c => c.nome === cur)) sel.value = cur;
   }
 
-  const sec = document.getElementById('parcela-section');
-  if (sec) {
-    const isEdit = !!document.getElementById('m-id').value;
-    sec.style.display = (!isEdit && tipo === 'Saída') ? '' : 'none';
-    if (tipo !== 'Saída') setParcelamento('avista');
+  atualizarSecaoPagamento();
+};
+
+// Mostra/oculta o bloco de forma de pagamento no passo 2, de acordo com o
+// tipo do lançamento. Ao editar, a conversão em parcelado não é permitida
+// (não dá para desdobrar um lançamento já salvo em várias parcelas), então
+// o botão "Parcelado" fica oculto e o modo fica travado em "à vista" — mas
+// a forma de pagamento à vista continua editável.
+function atualizarSecaoPagamento() {
+  const tipo   = document.getElementById('m-tipo').value;
+  const sec    = document.getElementById('parcela-section');
+  const btnP   = document.getElementById('btn-parcelado');
+  const isEdit = !!document.getElementById('m-id').value;
+  if (!sec) return;
+
+  sec.style.display = tipo === 'Saída' ? '' : 'none';
+  btnP.style.display = isEdit ? 'none' : '';
+  if (isEdit && _parcelamentoMode === 'parcelado') setParcelamento('avista');
+}
+
+window.setTipoLancamento = function(tipo) {
+  document.getElementById('m-tipo').value = tipo;
+
+  const estilos = {
+    'Saída':   { btn: 'btn-tipo-saida',   cor: '#f87171' },
+    'Entrada': { btn: 'btn-tipo-entrada', cor: '#22c56e' },
+    'Salário': { btn: 'btn-tipo-salario', cor: '#22c56e' }
+  };
+  ['btn-tipo-saida','btn-tipo-entrada','btn-tipo-salario'].forEach(id => {
+    const btn = document.getElementById(id);
+    const ativo = estilos[tipo].btn === id;
+    btn.style.background  = ativo ? `${estilos[tipo].cor}26` : 'transparent';
+    btn.style.borderColor = ativo ? estilos[tipo].cor : '#27272a';
+    btn.style.color       = ativo ? estilos[tipo].cor : '#71717a';
+  });
+
+  window.atualizarCatsPorTipo();
+};
+
+function irParaPasso(n) {
+  document.getElementById('modal-step-1').style.display = n === 1 ? '' : 'none';
+  document.getElementById('modal-step-2').style.display = n === 2 ? '' : 'none';
+  document.getElementById('step-dot-1').classList.toggle('active', n === 1);
+  document.getElementById('step-dot-2').classList.toggle('active', n === 2);
+}
+
+window.irParaStep2 = function() {
+  const data = document.getElementById('m-data').value;
+  const tipo = document.getElementById('m-tipo').value;
+  const cat  = document.getElementById('m-cat').value;
+  const desc = document.getElementById('m-desc').value.trim();
+
+  if (!data || (tipo !== 'Salário' && (!cat || !desc))) {
+    alert_('⚠️','Campos obrigatórios','Preencha data, categoria e descrição antes de continuar.');
+    return;
   }
+  irParaPasso(2);
+  updateParcelaPreview();
+};
+
+window.voltarParaStep1 = function() {
+  irParaPasso(1);
 };
 
 window.openModal = function(firestoreId) {
@@ -520,6 +613,7 @@ window.openModal = function(firestoreId) {
 
   _parcelamentoMode = 'avista';
   _numParcelas      = 2;
+  _formaPagamento   = 'Dinheiro';
 
   if (firestoreId) {
     const l=lancamentos.find(x=>x.firestoreId===firestoreId);
@@ -527,29 +621,28 @@ window.openModal = function(firestoreId) {
     const ehSalario = l.tipo === 'Entrada' && l.categoria === 'Salário';
     document.getElementById('m-id').value    = l.firestoreId;
     document.getElementById('m-data').value  = l.data;
-    document.getElementById('m-tipo').value  = ehSalario ? 'Salário' : l.tipo;
-    window.atualizarCatsPorTipo();
+    window.setTipoLancamento(ehSalario ? 'Salário' : l.tipo);
     if (!ehSalario) {
       document.getElementById('m-cat').value  = l.categoria;
       document.getElementById('m-desc').value = l.descricao;
     }
     document.getElementById('m-valor').value = l.valor;
     document.getElementById('m-obs').value   = l.obs||'';
-
-    document.getElementById('parcela-section').style.display = 'none';
+    if (l.formaPagamento && l.formaPagamento !== 'Crédito') _formaPagamento = l.formaPagamento;
+    if (l.formaPagamento === 'Crédito') _formaPagamento = 'Crédito';
   } else {
     document.getElementById('modal-title').textContent='Novo lançamento';
     document.getElementById('m-id').value    = '';
     document.getElementById('m-data').value  = new Date().toISOString().split('T')[0];
-    document.getElementById('m-tipo').value  = 'Saída';
-    window.atualizarCatsPorTipo();
+    window.setTipoLancamento('Saída');
     document.getElementById('m-desc').value  = '';
     document.getElementById('m-valor').value = '';
     document.getElementById('m-obs').value   = '';
-    document.getElementById('parcela-section').style.display = '';
-    setParcelamento('avista');
-    setTimeout(()=>document.getElementById('m-desc').focus(),80);
   }
+
+  atualizarSecaoPagamento();
+  setParcelamento('avista');
+  irParaPasso(1);
 };
 
 window.closeModal = () => {
@@ -560,13 +653,39 @@ window.closeModal = () => {
 
 let _parcelamentoMode = 'avista';
 let _numParcelas      = 2;
+let _formaPagamento   = 'Dinheiro';
+
+const FORMAS_PAGAMENTO = [
+  { id: 'Dinheiro', icone: '💵' },
+  { id: 'Pix',      icone: '⚡' },
+  { id: 'Débito',   icone: '💳' },
+  { id: 'Crédito',  icone: '🏦' }
+];
+
+function renderFormaPagamentoGrid() {
+  const grid = document.getElementById('forma-pagamento-grid');
+  if (!grid) return;
+  grid.innerHTML = FORMAS_PAGAMENTO.map(f => {
+    const ativo = f.id === _formaPagamento;
+    return `<button type="button" onclick="selectFormaPagamento('${f.id}')"
+      style="padding:8px 14px;border-radius:10px;font-size:.8rem;font-weight:600;
+      border:1px solid ${ativo?'#22c56e':'#27272a'};
+      background:${ativo?'rgba(34,197,110,.15)':'#1c1c1f'};
+      color:${ativo?'#22c56e':'#71717a'};cursor:pointer;transition:all .15s">${f.icone} ${f.id}</button>`;
+  }).join('');
+}
+
+window.selectFormaPagamento = function(id) {
+  _formaPagamento = id;
+  renderFormaPagamentoGrid();
+};
 
 window.setParcelamento = function(mode) {
   _parcelamentoMode = mode;
   const btnA = document.getElementById('btn-avista');
   const btnP = document.getElementById('btn-parcelado');
   const opts  = document.getElementById('parcela-opts');
-  const sec   = document.getElementById('parcela-section');
+  const formas = document.getElementById('avista-formas');
 
   if (mode === 'avista') {
     btnA.style.background   = 'rgba(34,197,110,.15)';
@@ -576,6 +695,8 @@ window.setParcelamento = function(mode) {
     btnP.style.borderColor  = '#27272a';
     btnP.style.color        = '#71717a';
     opts.style.display      = 'none';
+    formas.style.display    = '';
+    renderFormaPagamentoGrid();
   } else {
     btnP.style.background   = 'rgba(34,197,110,.15)';
     btnP.style.borderColor  = '#22c56e';
@@ -584,13 +705,11 @@ window.setParcelamento = function(mode) {
     btnA.style.borderColor  = '#27272a';
     btnA.style.color        = '#71717a';
     opts.style.display      = 'block';
+    formas.style.display    = 'none';
     renderParcelaGrid();
   }
   updateParcelaPreview();
-
- 
-  const tipo = document.getElementById('m-tipo').value;
-  sec.style.display = tipo === 'Saída' ? '' : 'none';
+  atualizarSecaoPagamento();
 };
 
 function renderParcelaGrid() {
@@ -639,6 +758,16 @@ window.salvarLancamento = async function() {
     return;
   }
 
+  // Forma de pagamento só se aplica a Saída: parcelado é sempre no crédito;
+  // à vista pode ser Dinheiro, Pix, Débito ou Crédito.
+  const formaPagamento = tipo === 'Saída'
+    ? (_parcelamentoMode === 'parcelado' ? 'Crédito' : _formaPagamento)
+    : null;
+
+  if (tipo === 'Saída' && !formaPagamento) {
+    await alert_('⚠️','Forma de pagamento','Selecione a forma de pagamento antes de salvar.');
+    return;
+  }
 
   if (!fid && _parcelamentoMode === 'parcelado' && tipo === 'Saída') {
     const parcVal   = Math.round((valor / _numParcelas) * 100) / 100;
@@ -656,6 +785,7 @@ window.salvarLancamento = async function() {
         categoria: cat,
         valor: parcVal,
         obs: obs || '',
+        formaPagamento,
         parcelaGrupo: parcGrupo,
         parcelaNum: i + 1,
         parcelaTotal: _numParcelas,
@@ -683,6 +813,8 @@ window.salvarLancamento = async function() {
 
  
   const payload = { data, tipo, descricao:desc, categoria:cat, valor, obs, updatedAt:new Date().toISOString() };
+  if (tipo === 'Saída') payload.formaPagamento = formaPagamento;
+  else if (fid) payload.formaPagamento = null;
   try {
     if (fid) {
       await updateDoc(lancDoc(fid), payload);
@@ -947,6 +1079,7 @@ window.excluirCategoria = async function(id, nome) {
 window.loadConfig = function() {
   document.getElementById('cfg-nome').value    = config.nome || currentUser.displayName || '';
   document.getElementById('cfg-meta').value    = config.meta    ||20;
+  document.getElementById('cfg-limite-credito').value = config.limiteCredito || '';
   const agora=new Date();
   document.getElementById('pdf-mes').value=MESES[agora.getMonth()];
   document.getElementById('pdf-ano').value=String(agora.getFullYear());
@@ -955,8 +1088,10 @@ window.loadConfig = function() {
 window.saveConfig = async function() {
   config.nome    = document.getElementById('cfg-nome').value.trim() || currentUser.displayName || '';
   config.meta    = parseFloat(document.getElementById('cfg-meta').value)||20;
+  config.limiteCredito = parseFloat(document.getElementById('cfg-limite-credito').value)||0;
   await setDoc(cfgDoc('main'), config);
   initUserInfo();
+  renderDashboard();
   toast('Configurações salvas!');
 };
 

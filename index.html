@@ -216,15 +216,15 @@
 
         <div class="card mb-6 animate-slide-up" style="animation-delay:.22s">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-sm font-medium text-zinc-300">Uso da renda</span>
+            <span class="text-sm font-medium text-zinc-300">Uso do limite de crédito</span>
             <span class="font-mono text-sm font-medium text-white" id="uso-pct">0%</span>
           </div>
           <div class="h-3 rounded-full overflow-hidden" style="background:#27272a">
             <div id="uso-bar" class="h-3 rounded-full transition-all duration-700 ease-out" style="width:0%"></div>
           </div>
           <div class="flex justify-between mt-2 text-xs" style="color:#71717a">
-            <span id="uso-label-gasto">Gasto: R$ 0</span>
-            <span id="uso-label-livre">Livre: R$ 0</span>
+            <span id="uso-label-gasto">Usado: R$ 0</span>
+            <span id="uso-label-livre">Disponível: R$ 0</span>
           </div>
         </div>
 
@@ -420,6 +420,10 @@
                 <label class="field-label">Meta de economia (%)</label>
                 <input id="cfg-meta" type="number" placeholder="20" min="0" max="100" class="field w-full text-sm py-2 font-mono" oninput="saveConfig()" />
               </div>
+              <div>
+                <label class="field-label">Limite do cartão de crédito (R$)</label>
+                <input id="cfg-limite-credito" type="number" placeholder="0,00" min="0" step="0.01" class="field w-full text-sm py-2 font-mono" oninput="saveConfig()" />
+              </div>
             </div>
           </div>
 
@@ -460,56 +464,85 @@
 
   <div id="modal" class="modal-overlay hidden">
     <div class="modal-box animate-slide-up">
-      <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center justify-between mb-5">
         <h2 class="text-lg font-display font-semibold text-white" id="modal-title">Novo lançamento</h2>
         <button onclick="closeModal()" class="p-1.5 rounded-lg transition-colors" style="color:#71717a;background:#27272a" onmouseover="this.style.background='#3f3f46'" onmouseout="this.style.background='#27272a'">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
-      <div class="space-y-4">
-        <input type="hidden" id="m-id" />
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="field-label">Data</label><input type="date" id="m-data" class="field w-full text-sm py-2" /></div>
-          <div><label class="field-label">Tipo</label>
-            <select id="m-tipo" onchange="atualizarCatsPorTipo()" class="field w-full text-sm py-2">
-              <option value="Saída">Saída</option><option value="Entrada">Entrada</option><option value="Salário">Salário</option>
-            </select>
+
+      <div class="flex items-center gap-2 mb-6">
+        <div id="step-dot-1" class="modal-step-dot"></div>
+        <div class="modal-step-line"></div>
+        <div id="step-dot-2" class="modal-step-dot"></div>
+      </div>
+
+      <input type="hidden" id="m-id" />
+      <input type="hidden" id="m-tipo" value="Saída" />
+
+      <!-- STEP 1: Tipo, Data, Categoria -->
+      <div id="modal-step-1">
+        <div class="space-y-4">
+          <div>
+            <label class="field-label">Tipo</label>
+            <div class="flex gap-2">
+              <button type="button" id="btn-tipo-saida" onclick="setTipoLancamento('Saída')" class="flex-1 py-2 rounded-xl text-sm font-semibold border transition-all">Saída</button>
+              <button type="button" id="btn-tipo-entrada" onclick="setTipoLancamento('Entrada')" class="flex-1 py-2 rounded-xl text-sm font-semibold border transition-all">Entrada</button>
+              <button type="button" id="btn-tipo-salario" onclick="setTipoLancamento('Salário')" class="flex-1 py-2 rounded-xl text-sm font-semibold border transition-all">Salário</button>
+            </div>
           </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="field-label">Data</label><input type="date" id="m-data" class="field w-full text-sm py-2" /></div>
+            <div id="cat-field"><label class="field-label">Categoria</label><select id="m-cat" class="field w-full text-sm py-2"></select></div>
+          </div>
+          <div id="desc-field"><label class="field-label">Descrição</label><input type="text" id="m-desc" placeholder="Ex: Supermercado, Salário…" class="field w-full text-sm py-2" /></div>
         </div>
-        <div id="desc-field"><label class="field-label">Descrição</label><input type="text" id="m-desc" placeholder="Ex: Supermercado, Salário…" class="field w-full text-sm py-2" /></div>
-        <div class="grid grid-cols-2 gap-3">
-          <div id="cat-field"><label class="field-label">Categoria</label><select id="m-cat" class="field w-full text-sm py-2"></select></div>
+        <div class="flex gap-3 mt-6">
+          <button onclick="closeModal()" class="flex-1 btn-secondary text-sm py-2.5">Cancelar</button>
+          <button onclick="irParaStep2()" class="flex-1 btn-primary text-sm py-2.5">Continuar</button>
+        </div>
+      </div>
+
+      <!-- STEP 2: Valor e forma de pagamento -->
+      <div id="modal-step-2" style="display:none">
+        <div class="space-y-4">
           <div><label class="field-label">Valor (R$)</label><input type="number" id="m-valor" placeholder="0,00" min="0" step="0.01" class="field w-full text-sm py-2 font-mono" /></div>
-        </div>
-        <div><label class="field-label">Observação (opcional)</label><input type="text" id="m-obs" placeholder="Nota adicional…" class="field w-full text-sm py-2" /></div>
 
+          <div id="parcela-section">
+            <label class="field-label">Pagamento</label>
+            <div class="flex gap-2">
+              <button type="button" id="btn-avista" onclick="setParcelamento('avista')"
+                class="flex-1 py-2 rounded-xl text-sm font-semibold border transition-all"
+                style="background:rgba(34,197,110,.15);border-color:#22c56e;color:#22c56e">
+                À vista
+              </button>
+              <button type="button" id="btn-parcelado" onclick="setParcelamento('parcelado')"
+                class="flex-1 py-2 rounded-xl text-sm font-semibold border transition-all"
+                style="background:transparent;border-color:#27272a;color:#71717a">
+                Parcelado
+              </button>
+            </div>
 
-        <div id="parcela-section">
-          <label class="field-label">Pagamento</label>
-          <div class="flex gap-2">
-            <button type="button" id="btn-avista" onclick="setParcelamento('avista')"
-              class="flex-1 py-2 rounded-xl text-sm font-semibold border transition-all"
-              style="background:rgba(34,197,110,.15);border-color:#22c56e;color:#22c56e">
-              À vista
-            </button>
-            <button type="button" id="btn-parcelado" onclick="setParcelamento('parcelado')"
-              class="flex-1 py-2 rounded-xl text-sm font-semibold border transition-all"
-              style="background:transparent;border-color:#27272a;color:#71717a">
-              Parcelado
-            </button>
+            <div id="avista-formas" style="margin-top:.75rem">
+              <label class="field-label">Forma de pagamento</label>
+              <div class="flex flex-wrap gap-2 mt-1" id="forma-pagamento-grid"></div>
+            </div>
+
+            <div id="parcela-opts" style="display:none;margin-top:.75rem">
+              <label class="field-label">Número de parcelas</label>
+              <div class="flex flex-wrap gap-2 mt-1" id="parcela-grid"></div>
+              <div id="parcela-preview" class="text-xs mt-2" style="color:#71717a"></div>
+            </div>
           </div>
-          <div id="parcela-opts" style="display:none;margin-top:.75rem">
-            <label class="field-label">Número de parcelas</label>
-            <div class="flex flex-wrap gap-2 mt-1" id="parcela-grid"></div>
-            <div id="parcela-preview" class="text-xs mt-2" style="color:#71717a"></div>
-          </div>
-        </div>
 
+          <div><label class="field-label">Observação (opcional)</label><input type="text" id="m-obs" placeholder="Nota adicional…" class="field w-full text-sm py-2" /></div>
+        </div>
+        <div class="flex gap-3 mt-6">
+          <button onclick="voltarParaStep1()" class="flex-1 btn-secondary text-sm py-2.5">Voltar</button>
+          <button onclick="salvarLancamento()" class="flex-1 btn-primary text-sm py-2.5">Salvar</button>
+        </div>
       </div>
-      <div class="flex gap-3 mt-6">
-        <button onclick="closeModal()" class="flex-1 btn-secondary text-sm py-2.5">Cancelar</button>
-        <button onclick="salvarLancamento()" class="flex-1 btn-primary text-sm py-2.5">Salvar</button>
-      </div>
+
     </div>
   </div>
 

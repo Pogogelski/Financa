@@ -153,6 +153,16 @@ tbody tr:hover { background: #1c1c1f; }
 }
 
 
+.modal-step-dot {
+  width: 8px; height: 8px; border-radius: 99px;
+  background: #27272a; transition: background .2s, width .2s;
+}
+.modal-step-dot.active { background: #22c56e; width: 20px; }
+.modal-step-line {
+  flex: 1; height: 1px; background: #27272a;
+}
+
+
 .modal-overlay {
   position: fixed; inset: 0; z-index: 60;
   background: rgba(0,0,0,.7);
